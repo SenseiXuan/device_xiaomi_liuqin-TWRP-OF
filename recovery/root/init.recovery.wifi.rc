@@ -1,0 +1,158 @@
+# 整合liuqin专属逻辑：精简冗余服务、统一模块加载顺序、适配QCA6490硬件
+on property:twrp.modules.loaded=true
+    ######## Add by liuqin-wifi
+    # WiFi early-init 阶段：触发模块复制（复用之前适配的wifi-module-load服务）
+    write /dev/kmsg "[liuqin-wifi][early-init] WiFi init started (QCA6490)"
+    write /proc/sys/kernel/firmware_config/force_sysfs_fallback 1
+    write /dev/kmsg "[liuqin-wifi][early-init] Trigger WiFi module copy..."
+    start wifi-module-load  # 统一使用之前定义的服务名称，避免冲突
+
+on property:twrp.cpko=true
+    ######## 模块加载：严格按依赖顺序insmod，适配liuqin QCA6490模块列表
+    write /dev/kmsg "[liuqin-wifi][insmod] Starting module load (dependency order)..."
+    # 基础依赖模块
+    wait /odm/wifi/modules/cnss_prealloc.ko 3000  # 超时3秒，避免卡死
+    insmod /odm/wifi/modules/cnss_prealloc.ko && write /dev/kmsg "[liuqin-wifi][insmod] cnss_prealloc.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] cnss_prealloc.ko load failed"
+    
+    wait /odm/wifi/modules/cnss_nl.ko 3000
+    insmod /odm/wifi/modules/cnss_nl.ko && write /dev/kmsg "[liuqin-wifi][insmod] cnss_nl.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] cnss_nl.ko load failed"
+    
+    wait /odm/wifi/modules/wlan_firmware_service.ko 3000
+    insmod /odm/wifi/modules/wlan_firmware_service.ko && write /dev/kmsg "[liuqin-wifi][insmod] wlan_firmware_service.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] wlan_firmware_service.ko load failed"
+    
+    wait /odm/wifi/modules/cnss_plat_ipc_qmi_svc.ko 3000
+    insmod /odm/wifi/modules/cnss_plat_ipc_qmi_svc.ko && write /dev/kmsg "[liuqin-wifi][insmod] cnss_plat_ipc_qmi_svc.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] cnss_plat_ipc_qmi_svc.ko load failed"
+    
+    wait /odm/wifi/modules/cnss_utils.ko 3000
+    insmod /odm/wifi/modules/cnss_utils.ko && write /dev/kmsg "[liuqin-wifi][insmod] cnss_utils.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] cnss_utils.ko load failed"
+    
+    # 核心驱动模块
+    wait /odm/wifi/modules/cnss2.ko 3000
+    insmod /odm/wifi/modules/cnss2.ko && write /dev/kmsg "[liuqin-wifi][insmod] cnss2.ko (core) loaded" || write /dev/kmsg "[liuqin-wifi][insmod] cnss2.ko load failed"
+    
+    # 辅助模块
+    wait /odm/wifi/modules/gsim.ko 3000
+    insmod /odm/wifi/modules/gsim.ko && write /dev/kmsg "[liuqin-wifi][insmod] gsim.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] gsim.ko load failed"
+    
+    wait /odm/wifi/modules/rmnet_mem.ko 3000
+    insmod /odm/wifi/modules/rmnet_mem.ko && write /dev/kmsg "[liuqin-wifi][insmod] rmnet_mem.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] rmnet_mem.ko load failed"
+    
+    wait /odm/wifi/modules/ipam.ko 3000
+    insmod /odm/wifi/modules/ipam.ko && write /dev/kmsg "[liuqin-wifi][insmod] ipam.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] ipam.ko load failed"
+    
+    wait /odm/wifi/modules/rfkill.ko 3000
+    insmod /odm/wifi/modules/rfkill.ko && write /dev/kmsg "[liuqin-wifi][insmod] rfkill.ko loaded" || write /dev/kmsg "[liuqin-wifi][insmod] rfkill.ko load failed"
+    
+    # 802.11协议模块（最后加载，依赖核心驱动）
+    wait /odm/wifi/modules/cfg80211.ko 3000
+    insmod /odm/wifi/modules/cfg80211.ko && write /dev/kmsg "[liuqin-wifi][insmod] cfg80211.ko (802.11 core) loaded" || write /dev/kmsg "[liuqin-wifi][insmod] cfg80211.ko load failed"
+    
+    # QCA6490专属模块
+    wait /odm/wifi/modules/qca_cld3_kiwi_v2.ko 3000
+    insmod /odm/wifi/modules/qca_cld3_kiwi_v2.ko && write /dev/kmsg "[liuqin-wifi][insmod] qca_cld3_kiwi_v2.ko (QCA6490) loaded" || write /dev/kmsg "[liuqin-wifi][insmod] qca_cld3_kiwi_v2.ko load failed"
+    
+    write /dev/kmsg "[liuqin-wifi][insmod] All modules load process completed"
+    setprop twrp.insmodko 1  # 标记模块加载完成
+    ######## Add End
+
+on init
+    ######## Add by liuqin-wifi
+    # 初始化WiFi必要目录（适配liuqin路径）
+    write /dev/kmsg "[liuqin-wifi][prepare] Creating WiFi required directories..."
+    # wpa_supplicant配置&缓存目录
+    mkdir -p /data/misc/wifi 0777 root shell
+    # 临时sockets目录（适配TWRP环境）
+    mkdir -p /tmp/recovery/sockets 0777 root root
+    write /dev/kmsg "[liuqin-wifi][prepare] Directories created: /data/misc/wifi /tmp/recovery/sockets"
+    ######## Add End
+
+on boot
+    ######## Add by liuqin-wifi
+    # WiFi环境初始化（适配liuqin硬件）
+    write /dev/kmsg "[liuqin-wifi][boot] Initializing WiFi env..."
+    # 启用WLAN SSR恢复（高通标准配置）
+    if [ -e /sys/kernel/cnss/recovery ]; then
+        write /sys/kernel/cnss/recovery 3
+        write /dev/kmsg "[liuqin-wifi][boot] WLAN SSR recovery enabled"
+    else
+        write /dev/kmsg "[liuqin-wifi][boot] /sys/kernel/cnss/recovery not found, skip SSR"
+    fi
+    # 唤醒锁权限配置
+    chown radio wakelock /sys/power/wake_lock 2>/dev/null
+    chown radio wakelock /sys/power/wake_unlock 2>/dev/null
+    chmod 0660 /sys/power/wake_lock 2>/dev/null
+    chmod 0660 /sys/power/wake_unlock 2>/dev/null
+    write /dev/kmsg "[liuqin-wifi][boot] WiFi env initialized"
+    ######## Add End
+
+######## Add by liuqin-wifi：精简必要服务（移除liuqin无用服务）
+# WiFi核心依赖服务（高通QCA6490必需）
+service vendor.qrtr-ns /vendor/bin/qrtr-ns -f
+    disabled
+    user root
+    group root
+    capabilities NET_BIND_SERVICE
+    seclabel u:r:recovery:s0
+
+service vendor.rmt_storage /vendor/bin/rmt_storage
+    disabled
+    user root
+    ioprio rt 0
+    seclabel u:r:recovery:s0
+
+# 高通WiFi核心守护进程（之前已定义，统一配置）
+service cnss-daemon /vendor/bin/cnss-daemon -n -l
+    disabled
+    user root
+    group root system inet net_admin wifi
+    capabilities NET_ADMIN
+    seclabel u:r:recovery:s0
+    after wifi-module-load  # 依赖模块复制完成
+
+# WPA Supplicant（WiFi连接管理，适配liuqin配置路径）
+service wpa_supplicant /vendor/bin/hw/wpa_supplicant -Dnl80211 -iwlan0 -dd -O/tmp/recovery/sockets -c/vendor/etc/wifi/wpa_supplicant.conf
+    disabled
+    seclabel u:r:recovery:s0
+    after cnss-daemon  # 依赖cnss-daemon启动
+
+# DHCP客户端（获取IP地址，必需）
+service dhcpcd /system/bin/dhcpcd wlan0 -B
+    disabled
+    oneshot
+    seclabel u:r:recovery:s0
+    after wpa_supplicant  # 依赖wpa_supplicant连接成功
+
+# 模块复制服务（复用之前定义，统一名称）
+service wifi-module-load /system/bin/sh /system/bin/cp-wifi-ko.sh
+    disabled
+    oneshot
+    seclabel u:r:recovery:s0
+
+######## 触发器优化：理顺启动顺序，避免冲突
+# 1. 模块加载完成后，启动核心服务
+on property:twrp.insmodko=1
+    write /dev/kmsg "[liuqin-wifi][service] Starting core services..."
+    start vendor.qrtr-ns && write /dev/kmsg "[liuqin-wifi][service] vendor.qrtr-ns started"
+    start vendor.rmt_storage && write /dev/kmsg "[liuqin-wifi][service] vendor.rmt_storage started"
+    start cnss-daemon && write /dev/kmsg "[liuqin-wifi][service] cnss-daemon started"
+    setprop liuqin.wifi.services.ready true  # 标记服务启动完成
+
+# 2. 服务启动后，启动wpa_supplicant
+on property:liuqin.wifi.services.ready=true
+    write /dev/kmsg "[liuqin-wifi][supplicant] Starting wpa_supplicant..."
+    start wpa_supplicant
+    setprop liuqin.wifi.supplicant.started true
+
+# 3. wpa_supplicant启动后，启动dhcpcd获取IP
+on property:liuqin.wifi.supplicant.started=true
+    write /dev/kmsg "[liuqin-wifi][dhcp] Starting dhcpcd to get IP..."
+    start dhcpcd
+    write /dev/kmsg "[liuqin-wifi][init] All WiFi related processes started"
+
+# 4. 状态监听：wpa_supplicant异常重启
+on property:supplicant.status=running
+    write /dev/kmsg "[liuqin-wifi][supplicant] wpa_supplicant is running"
+on property:supplicant.status=stopped
+    write /dev/kmsg "[liuqin-wifi][supplicant] wpa_supplicant stopped, restarting..."
+    start wpa_supplicant
+######## Add End

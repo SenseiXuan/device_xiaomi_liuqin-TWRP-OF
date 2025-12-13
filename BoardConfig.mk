@@ -160,20 +160,6 @@ TARGET_USES_LOGD := true
 
 # Kernel modules
 TW_LOAD_VENDOR_MODULES_EXCLUDE_GKI := true
-# 新增WiFi模块加载列表（与cp-wifi-ko.sh中KO_FILES完全一致）
-TW_LOAD_VENDOR_MODULES += \
-    cnss_prealloc.ko \
-    cnss_nl.ko \
-    wlan_firmware_service.ko \
-    cnss_plat_ipc_qmi_svc.ko \
-    cnss_utils.ko \
-    cnss2.ko \
-    gsim.ko \
-    rmnet_mem.ko \
-    ipam.ko \
-    rfkill.ko \
-    cfg80211.ko \
-    qca_cld3_kiwi_v2.ko
 
 # THP fix
 TW_XIAOMI_TOUCH_PERMISSION_FIX := true
@@ -183,24 +169,3 @@ TW_STATUS_ICONS_ALIGN := center
 
 # Serialno
 TW_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID := true
-
-# ============== 新增 WiFi 专属编译配置 ==============
-# 启用TWRP WiFi功能
-TW_INCLUDE_WIFI := true
-# 指定WiFi芯片型号（QCA6490）
-TW_WIFI_CHIPSET := QCA6490
-# WiFi固件路径（与WCNSS_qcom_cfg.ini一致）
-TARGET_WIFI_FIRMWARE_PATH := "/vendor/firmware_mnt/image/qca6490/"
-# WiFi模块存放路径（与cp-wifi-ko.sh中TARGET_DIR一致）
-TW_WIFI_MODULE_PATH := "/odm/wifi/modules"
-# 启用WPA Supplicant（WiFi连接管理）
-TW_INCLUDE_WPA_SUPPLICANT := true
-# 启用DHCP客户端（获取IP地址）
-TW_INCLUDE_DHCPD := true
-# 补充网络文件系统支持
-TW_INCLUDE_FUSE_EXFAT := true
-# 启用网络功能依赖
-TW_INCLUDE_NETWORK := true
-# 高通WiFi依赖配置
-QCOM_WIFI_ENABLED := true
-QCOM_WIFI_VENDOR := true

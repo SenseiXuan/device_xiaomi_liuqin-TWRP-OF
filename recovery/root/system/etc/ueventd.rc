@@ -1,8 +1,7 @@
 import /vendor/etc/ueventd.rc
 import /odm/etc/ueventd.rc
 
-# 新增WiFi固件路径：适配liuqin QCA6490固件存放目录
-firmware_directories /etc/firmware/ /odm/firmware/ /vendor/firmware/ /firmware/image/ /vendor/firmware_mnt/image/
+firmware_directories /etc/firmware/ /odm/firmware/ /vendor/firmware/ /firmware/image/
 uevent_socket_rcvbuf_size 16M
 
 subsystem graphics
@@ -24,12 +23,6 @@ subsystem sound
 subsystem dma_heap
    devname uevent_devpath
    dirname /dev/dma_heap
-
-# 新增WiFi subsystem：确保WiFi设备节点归类正确
-subsystem net
-    devname uevent_devpath
-    dirname /dev/net
-
 # ueventd can only set permissions on device nodes and their associated
 # sysfs attributes, not on arbitrary paths.
 #
@@ -62,28 +55,7 @@ subsystem net
 /dev/iio:device*                                        0660   system     system
 /sys/bus/iio/devices/iio:device* buffer/enable                  0600 system system
 /sys/bus/iio/devices/iio:device* scan_elements/in_proximity_en  0600 system system
-
 /sys/bus/iio/devices/iio:device* scan_elements/in_timestamp_en  0600 system system
-
-# ========== 新增 liuqin WiFi（QCA6490）专属权限配置 ==========
-# WiFi核心设备节点：允许system组访问
-/dev/wcnss_wlan           0660   system     system
-/dev/wcnss_ctrl           0660   system     system
-/dev/qca6490              0660   system     system
-/dev/cnss-daemon          0755   root       root
-# WiFi虚拟网络设备节点
-/dev/net/wlan0            0660   system     system
-/dev/net/p2p0            0660   system     system
-# WiFi固件文件权限：确保驱动能读取QCA6490固件
-/vendor/firmware_mnt/image/qca6490/*  0644   system     system
-/firmware/image/qca6490/*              0644   system     system
-# WiFi中断队列权限：优化网络吞吐量
-/sys/devices/soc/a000000.qcom,wcnss-wlan/net/wlan0/queues/rx-* rps_cpus           0660   system     system
-/sys/devices/soc/a000000.qcom,wcnss-wlan/net/p2p0/queues/rx-* rps_cpus            0660   system     system
-# WiFi功率管理权限：允许调整传输功率
-/sys/class/net/wlan0/phy_power        0660   system     system
-/sys/class/net/p2p0/phy_power         0660   system     system
-# ========================================================
 
 # these should not be world writable
 /dev/uhid                 0660   uhid       uhid

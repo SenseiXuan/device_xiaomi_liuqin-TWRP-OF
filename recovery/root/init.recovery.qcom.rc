@@ -30,7 +30,7 @@ on early-fs
     write /proc/sys/walt/sched_lib_mask_force 255
 
 on fs
-    export LD_LIBRARY_PATH /system/lib64:/vendor/lib64:/vendor/lib64/hw:/vendor/lib64/wifi  # 新增WiFi库路径
+    export LD_LIBRARY_PATH /system/lib64:/vendor/lib64:/vendor/lib64/hw
     wait /dev/block/platform/soc/${ro.boot.bootdevice}
     symlink /dev/block/platform/soc/${ro.boot.bootdevice} /dev/block/bootdevice
     write /proc/sys/kernel/firmware_config/force_sysfs_fallback 1
@@ -43,20 +43,15 @@ on fs
     mkdir /tmp/persist 0775 shell system
     mount none /tmp/persist /mnt/vendor/persist bind rec
     install_keyring
-    # 提前创建WiFi模块目录（避免cp-wifi-ko.sh创建失败）
-    mkdir -p /odm/wifi/modules 0755 root root
 
 on init
     start boot-hal-1-2
-    # 新增WiFi相关属性初始化
-    setprop twrp.wifi.loaded false
-    setprop prepdecrypt.setpatch true  # 兼容解密脚本
 
 on boot
     setprop sys.usb.config adb
 
 on property:twrp.modules.loaded=true
-    # Mount firmware（保留固件挂载，WiFi需依赖）
+    # Mount firmware
     mkdir /firmware
     mount vfat /dev/block/bootdevice/by-name/modem${ro.boot.slot_suffix} /firmware ro
     # Load ADSP firmware for PMIC
@@ -65,40 +60,9 @@ on property:twrp.modules.loaded=true
     wait /sys/class/power_supply/battery
     start vendor.qseecomd
     start health-hal-2-1
-    # 移除冗余服务：vibratorfeature-hal-service（yudi专属，liuqin无对应依赖）
-    
-    # 新增WiFi核心配置（关键适配）
-    # 1. 固件路径软链接（liuqin QCA6490 固件映射）
-    mkdir -p /vendor/firmware_mnt/image/qca6490
-    symlink /firmware/image/qca6490 /vendor/firmware_mnt/image/qca6490
-    # 2. 启动WiFi模块加载脚本
-    start wifi-module-load
-    # 3. 启动高通WiFi核心守护进程
-    start cnss-daemon
-    # 4. 等待WiFi模块加载完成（最多等待5秒）
-    wait /odm/wifi/modules/cnss2.ko 5000
-    # 5. 标记WiFi加载状态
-    setprop twrp.wifi.loaded true
+    start vibratorfeature-hal-service
+    umount /firmware
 
 on property:vendor.sys.listeners.registered=true
     start gatekeeper-1-0
     start vendor.keymaster-4-1
-
-# 新增WiFi模块加载服务（执行cp-wifi-ko.sh）
-service wifi-module-load /system/bin/sh /system/bin/cp-wifi-ko.sh
-    user root
-    group root
-    oneshot
-    seclabel u:r:recovery:s0
-    # 依赖twrp.modules.loaded=true，确保驱动分区已就绪
-    oneshot
-
-# 新增高通WiFi核心守护进程（加载固件+管理WiFi连接）
-service cnss-daemon /vendor/bin/cnss-daemon
-    class core
-    user root
-    group root net_bt net_raw wifi
-    seclabel u:r:recovery:s0
-    oneshot
-    # 依赖wifi-module-load完成，确保驱动模块已加载
-    after wifi-module-load

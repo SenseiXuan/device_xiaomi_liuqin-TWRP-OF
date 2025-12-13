@@ -168,6 +168,23 @@ jobs:
           DEVICE_TREE_URL="${DEVICE_TREE_URL%.git}"
         fi
         echo "DEVICE_TREE_URL=${DEVICE_TREE_URL}" >> $GITHUB_ENV
+        
+    - name: Include Recovery Installer
+      run: |
+        if [ ${{ github.event.inputs.RECOVERY_INSTALLER }} = true ]; then
+          cd workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/
+          wget https://github.com/kinguser981/recovery-installer/releases/download/zip/recovery-installer.zip
+          zip -ur recovery-installer.zip ${{ env.RECOVERY_TYPE }}.img
+        fi
+      continue-on-error: true
+        
+    - name: Recovery to tar for Samsung devices
+      run: |
+        if [ ${{ github.event.inputs.RECOVERY_TAR }} = true ]; then
+          cd workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/
+          tar -cvf ${{ env.RECOVERY_TYPE }}.tar ${{ env.RECOVERY_TYPE }}.img
+        fi
+      continue-on-error: true
 
     - name: Upload to Release
       uses: softprops/action-gh-release@master

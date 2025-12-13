@@ -56,6 +56,16 @@ on:
         type: boolean
         required: true
         default: true
+      RECOVERY_TAR:
+        description: 'Release Recovery.tar For Samsung devices'
+        required: false
+        default: false
+        type: boolean
+      RECOVERY_INSTALLER:
+        description: 'Include recovery installer.zip'
+        type: boolean
+        required: true
+        default: true
 
 jobs:
   build:

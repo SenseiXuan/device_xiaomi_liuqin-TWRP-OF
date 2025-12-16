@@ -15,7 +15,7 @@ export OF_AB_DEVICE_WITH_RECOVERY_PARTITION=1  # A/B设备且存在独立recover
 export OF_USE_LZ4_COMPRESSION=1  # 使用LZ4压缩算法
 #export FOX_VANILLA_BUILD=1  # 纯净版构建（不含额外预装组件）
 export OF_NO_MIUI_PATCH_WARNING=1  # 禁用MIUI补丁警告
-export OF_DISABLE_MIUI_OTA_BY_DEFAULT=1  # 默认禁用MIUI OTA功能
+#export OF_DISABLE_MIUI_OTA_BY_DEFAULT=1  # 默认禁用MIUI OTA功能
  
 #设备相关配置（合并兼容设备列表，补充核心参数）
  

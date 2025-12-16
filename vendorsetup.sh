@@ -103,7 +103,7 @@ export OF_QUICK_BACKUP_LIST="/boot;/data;"  # 快速备份默认分区（boot+da
  
 export FOX_MAINTAINER_PATCH_VERSION=$(date +%y%m%d)  # 维护者补丁版本（按日期生成）
 export OF_MAINTAINER="Nanya"  # 维护者名称
-#export FOX_MOVE_MAGISK_INSTALLER_TO_RAMDISK=1  # 将Magisk安装包移至内存盘
+export FOX_MOVE_MAGISK_INSTALLER_TO_RAMDISK=1  # 将Magisk安装包移至内存盘
 #export OF_SKIP_FBE_DECRYPTION_SDKVERSION=32  # Android 12L及以上跳过FBE解密（避免卡LOGO）
  
 #启动画面修改（保持原有配置，注释冗余重复项）

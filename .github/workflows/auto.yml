@@ -31,7 +31,7 @@ on:
         required: true
         default: '34'
       LUNCH_TARGET:
-        description: "🍽️ lunch twrp_ (default same as device name)"
+        description: "🛠️ lunch twrp_ (default same as device name)"
         required: false
         default: 'liuqin'
       BUILD_PARTITION:
@@ -52,13 +52,23 @@ on:
           - Magisk
           - MagiskAlpha
           - MagiskDelta
+      RECOVERY_INSTALLER:
+        description: '💾Include recovery magisk installer.zip'
+        type: boolean
+        required: true
+        default: true    
+      RECOVERY_TAR:
+        description: '💾Release Recovery.tar For Samsung devices'
+        type: boolean
+        required: false
+        default: false    
       USE_PATCHES:
         description: '🧩 Apply wifi 14.1 patches'
         type: boolean
         required: true
         default: false
-      USE_SKKK_PATCHES:
-        description: '🧩 Apply skkk 12.1 patches'
+      USE_YMDZQ_PATCHES:
+        description: '🧩 Apply ymdzq ofrp 12.1 patches'
         type: boolean
         required: true
         default: false
@@ -87,11 +97,11 @@ jobs:
             echo "📂 Device path: ${{ github.event.inputs.DEVICE_PATH }}"
             echo "🖥️ Device name: ${{ github.event.inputs.DEVICE_NAME }}"
             echo "📶 Target API Level: ${{ github.event.inputs.TARGET_API_LEVEL }}"
-            echo "🍽️ Lunch target: ${{ env.LUNCH_TARGET }}"
+            echo "🛠️ Lunch target: ${{ env.LUNCH_TARGET }}"
             echo "🎯 Build target: ${{ github.event.inputs.BUILD_PARTITION }}.img"
             echo "📅 Build date: $(date)"
             echo "🧩 Apply wifi patches: ${{ github.event.inputs.USE_PATCHES }}"
-            echo "🧩 Apply skkk patches: ${{ github.event.inputs.USE_SKKK_PATCHES }}"
+            echo "🧩 Apply ymdzq patches: ${{ github.event.inputs.USE_YMDZQ_PATCHES }}"
             echo
             echo EOF
           } >> "$GITHUB_ENV"
@@ -147,8 +157,8 @@ jobs:
             cd $WORKINGDIR
           fi
           
-      - name: 🧩 Apply skkk 12.1 patches
-        if: ${{ inputs.USE_SKKK_PATCHES == true && inputs.MANIFEST_BRANCH == '12.1' }}
+      - name: 🧩 Apply ymdzq 12.1 patches
+        if: ${{ inputs.USE_YMDZQ_PATCHES == true && inputs.MANIFEST_BRANCH == '12.1' }}
         run: |
           WORKINGDIR=$(pwd)
           sed -i 's/<project name="android_hardware_qcom_bootctrl" path="hardware\/qcom-caf\/bootctrl" remote="LineageOS" revision="lineage-19.1-caf" \/>/<project name="android_hardware_qcom_bootctrl" path="hardware\/qcom-caf\/bootctrl" remote="LineageOS" revision="lineage-21.0-caf" \/>/g' $WORKINGDIR/.repo/manifests/twrp-default.xml
@@ -157,7 +167,7 @@ jobs:
           repo sync
           mv $WORKINGDIR/bootable/recovery-ofrp $WORKINGDIR/bootable/recovery
           cd $WORKINGDIR/bootable/recovery
-          git fetch https://github.com/ymdzq/OrangeFox_Recovery fox_12.1 && git cherry-pick 36289fac..05b3e1b9 || echo "⚠️ 12.1分支skkk补丁应用失败/无新补丁，继续构建"
+          git fetch https://github.com/ymdzq/OrangeFox_Recovery fox_12.1 && git cherry-pick 36289fac..05b3e1b9 || echo "⚠️ 12.1分支ymdzq补丁应用失败/无新补丁，继续构建"
           cd $WORKINGDIR
 
       - name: 🧩 Apply wifi 14.1 patches
@@ -254,13 +264,31 @@ jobs:
           fi
           make clean
           mka adbd ${{ inputs.BUILD_TARGET }} -j$(nproc --all)
-
+      
+    - name: 💾Include Recovery Installer
+      if: ${{ RECOVERY_INSTALLER == true }}
+      run: |
+          WORKINGDIR=$(pwd)
+          cd $WORKINGDIR/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/
+          wget https://github.com/kinguser981/recovery-installer/releases/download/zip/recovery-installer.zip
+          zip -ur recovery-installer.zip ${{ env.RECOVERY_TYPE }}.img
+      continue-on-error: true
+        
+    - name: 💾Recovery to tar for Samsung devices
+      if: ${{ RECOVERY_TAR == true }}
+      run: |
+          WORKINGDIR=$(pwd)
+          cd $WORKINGDIR/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/
+          tar -cvf ${{ env.RECOVERY_TYPE }}.tar ${{ env.RECOVERY_TYPE }}.img
+      continue-on-error: true
+        
       - name: 📤 Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
-            out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
+            out/target/product/${{ inputs.DEVICE_NAME }}/*.img
+            out/target/product/${{ inputs.DEVICE_NAME }}/recovery-installer.zip
+            out/target/product/${{ inputs.DEVICE_NAME }}/*.tar
           name: 🦊 OrangeFox-R11.3-${{ inputs.DEVICE_NAME }}-${{ env.BUILD_DATE }}-${{ github.run_id }}
           tag_name: ${{ env.BUILD_DATE }}-${{ github.run_id }}
           body: |
@@ -271,7 +299,7 @@ jobs:
             🔧 Magisk Version: ${{ inputs.MAGISK_VERSION }}
             📶 Target API Level: ${{ inputs.TARGET_API_LEVEL }}
             🧩 Apply wifi 14.1 patches: ${{ inputs.USE_PATCHES }}
-            🧩 Apply skkk 12.1 patches: ${{ inputs.USE_SKKK_PATCHES }}
+            🧩 Apply ymdzq ofrp 12.1 patches: ${{ inputs.USE_YMDZQ_PATCHES }}
             ### ⚠️ Warning
             - For ${{ inputs.DEVICE_NAME }} only!
           body_path: ${{ inputs.DEVICE_PATH }}/INFO.txt

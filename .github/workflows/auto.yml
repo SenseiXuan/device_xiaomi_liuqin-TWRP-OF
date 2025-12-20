@@ -263,7 +263,10 @@ jobs:
             exit 1
           fi
           make clean
-          mka adbd ${{ inputs.BUILD_PARTITION }} -j$(nproc --all)
+          (while true; do echo "🛠️ [$(date +%T)] Building OFRP... | Free Mem: $(free -h | awk '/Mem:/ {print $4}')"; sleep 10; done) &
+          TIP_PID=$!
+          mka adbd ${{ inputs.BUILD_PARTITION }}image -j$(nproc --all)
+          kill $TIP_PID && exit 0
 
       - name: 💾 Include Recovery Installer
         if: ${{ inputs.RECOVERY_INSTALLER == true }}
@@ -286,7 +289,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            out/target/product/${{ inputs.DEVICE_NAME }}/*.img
+            out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
             out/target/product/${{ inputs.DEVICE_NAME }}/recovery-installer.zip
             out/target/product/${{ inputs.DEVICE_NAME }}/*.tar
           name: 🦊 OrangeFox-R11.3-${{ inputs.DEVICE_NAME }}-${{ env.BUILD_DATE }}-${{ github.run_id }}

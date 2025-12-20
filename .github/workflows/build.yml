@@ -46,14 +46,19 @@ jobs:
       CCACHE_MAXSIZE: "5G"  
 
     steps:
-      - name: 📋 Show build info
+      - name: 📋 Show build info & Set env vars
         run: |
+          # 定义关键环境变量（修复未定义问题）
+          echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
+          echo "TWRP_VERSION=TWRP-3.7.0_16-0" >> $GITHUB_ENV  # 可根据实际调整版本
+          
           echo "=== Build Configuration ==="
           echo "Manifest: ${{ inputs.TWRP_MANIFEST_URL }} (${{ inputs.TWRP_MANIFEST_BRANCH }})"
           echo "Device Tree: ${{ inputs.DEVICE_TREE_URL }} (${{ inputs.DEVICE_TREE_BRANCH }})"
           echo "Device Path: ${{ inputs.DEVICE_PATH }}"
           echo "Build Target: ${{ inputs.BUILD_TARGET }}"
-          echo "Build Date: $BUILD_DATE"
+          echo "Build Date: ${{ env.BUILD_DATE }}"
+          echo "TWRP Version: ${{ env.TWRP_VERSION }}"
           echo "=========================="
 
       - name: 🧹 Cleanup & Maximize space
@@ -75,7 +80,7 @@ jobs:
 
       - name: 🐏 Optimize zram (memory boost)
         run: |
-          set -e
+          set -eo pipefail
           sudo apt update && sudo apt install -y zram-tools linux-modules-extra-$(uname -r)
           sudo modprobe zram
           sudo sed -i 's/^#PERCENT=50/PERCENT=95/' /etc/default/zramswap
@@ -85,39 +90,49 @@ jobs:
 
       - name: 🛠️ Setup build environment
         run: |
-          set -e
+          set -eo pipefail
           export DEBIAN_FRONTEND=noninteractive
           sudo apt update && sudo apt upgrade -y
-          sudo apt install repo -y
+          sudo apt install repo git-lfs -y  # 新增git-lfs（避免大文件同步失败）
           git config --global user.name "${{ github.actor }}"
           git config --global user.email "${{ github.actor }}@users.noreply.github.com"
     
-      - name: 📥 Sync source code (optimized)
+      - name: 📥 Sync source code (fixed)
         run: |
-          set -e
-          # 初始化repo（浅克隆+单分支，大幅提速）
-          repo init -u ${{ inputs.TWRP_MANIFEST_URL }} -b ${{ inputs.TWRP_MANIFEST_BRANCH }} \ --depth=1
+          set -eo pipefail
+          # 修复：去掉多余反斜杠，保留基础参数
+          repo init \
+            -u ${{ inputs.TWRP_MANIFEST_URL }} \
+            -b ${{ inputs.TWRP_MANIFEST_BRANCH }} \
+            --depth=1 \
+            --no-repo-verify  # 跳过repo版本验证（避免无关警告）
+          
+          # 恢复原始 repo sync 命令，去除速度优化参数
           repo sync
           echo "Source sync completed successfully"
 
       - name: 📱 Clone device tree
         run: |
-          set -e
+          set -eo pipefail
           # 创建设备路径（避免路径不存在报错）
           mkdir -p $(dirname ${{ inputs.DEVICE_PATH }})
-          git clone ${{ inputs.DEVICE_TREE_URL }} -b ${{ inputs.DEVICE_TREE_BRANCH }} \ --depth=1 ${{ inputs.DEVICE_PATH }}
+          git clone \
+            ${{ inputs.DEVICE_TREE_URL }} \
+            -b ${{ inputs.DEVICE_TREE_BRANCH }} \
+            --depth=1 \
+            ${{ inputs.DEVICE_PATH }}
 
       - name: 📝 Generate build info
         run: |
-          set -e
+          set -eo pipefail
           BUILD_INFO="TWRP Build Info
           =================
-          Version: $TWRP_VERSION
+          Version: ${{ env.TWRP_VERSION }}
           Device: ${{ inputs.DEVICE_NAME }}
           Manifest Branch: ${{ inputs.TWRP_MANIFEST_BRANCH }}
           Device Tree Branch: ${{ inputs.DEVICE_TREE_BRANCH }}
           Build Target: ${{ inputs.BUILD_TARGET }}
-          Build Date: $BUILD_DATE
+          Build Date: ${{ env.BUILD_DATE }}
           GitHub Run ID: ${{ github.run_id }}
           "
           echo -e "$BUILD_INFO" > INFO.txt
@@ -134,7 +149,7 @@ jobs:
 
       - name: 🏗️ Build TWRP (with ccache & logs)
         run: |
-          set -e
+          set -eo pipefail
           # 初始化构建环境
           source build/envsetup.sh
           # 配置ccache
@@ -144,19 +159,20 @@ jobs:
           export USE_CCACHE=1
           # 预热ccache（加快编译）
           ccache -s
-          # 开始构建（lunch参数自动适配设备路径）
-          lunch $(basename ${{ inputs.DEVICE_PATH }})-eng
+          # 修复：TWRP正确lunch格式（twrp_设备名-eng）
+          lunch twrp_${{ inputs.DEVICE_NAME }}-eng
           make clean
-          # 并行编译（显示详细日志，输出到文件）
-          make adbd ${{ inputs.BUILD_TARGET }}image -j$(nproc --all)
+          # 并行编译+日志捕获（修复无build.log问题）
+          make adbd ${{ inputs.BUILD_TARGET }}image -j$(nproc --all) > build.log 2>&1
           # 验证输出文件
           OUTPUT_FILE="out/target/product/${{ inputs.DEVICE_NAME }}/${{ inputs.BUILD_TARGET }}.img"
           if [ ! -f "$OUTPUT_FILE" ]; then
             echo "Error: Build failed - Output file not found"
+            cat build.log  # 打印日志方便排查
             exit 1
           fi
           # 重命名输出文件（包含完整信息）
-          mv "$OUTPUT_FILE" "out/target/product/${{ inputs.DEVICE_NAME }}/TWRP-${TWRP_VERSION}-${{ inputs.DEVICE_NAME }}-${BUILD_DATE}.img"
+          mv "$OUTPUT_FILE" "out/target/product/${{ inputs.DEVICE_NAME }}/${{ env.TWRP_VERSION }}-${{ inputs.DEVICE_NAME }}-${{ env.BUILD_DATE }}.img"
           echo "Build completed successfully!"
           ccache -s  # 显示ccache使用情况
 
@@ -164,10 +180,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            out/target/product/${{ inputs.DEVICE_NAME }}/TWRP-${{ env.TWRP_VERSION }}-${{ inputs.DEVICE_NAME }}-${{ env.BUILD_DATE }}.img
+            out/target/product/${{ inputs.DEVICE_NAME }}/${{ env.TWRP_VERSION }}-${{ inputs.DEVICE_NAME }}-${{ env.BUILD_DATE }}.img
             build.log
             INFO.txt
-          name: TWRP-${{ env.TWRP_VERSION }}-${{ inputs.DEVICE_NAME }}-${{ env.BUILD_DATE }}
+          name: ${{ env.TWRP_VERSION }}-${{ inputs.DEVICE_NAME }}-${{ env.BUILD_DATE }}
           tag_name: ${{ env.BUILD_DATE }}-${{ inputs.DEVICE_NAME }}-${{ github.run_id }}
           body_path: INFO.txt
           draft: false

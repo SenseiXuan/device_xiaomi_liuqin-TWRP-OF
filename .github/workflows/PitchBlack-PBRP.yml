@@ -30,7 +30,7 @@ on:
       BUILD_TARGET:
         description: 'Build Target (use "pbrp" for Android 11+)'
         required: true
-        default: 'pbrp'
+        default: 'recovery'
         type: choice
         options:
           - pbrp
